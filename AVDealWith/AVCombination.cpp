@@ -243,21 +243,27 @@ void AVCombination::getFolderVedioOrAudioFilePathList(std::string rootPath, std:
 #elif _WIN64 || _WIN32  
     WIN32_FIND_DATA findedData;
     std::wstring findPath;
+    // string 2 wstring
     int len = MultiByteToWideChar(CP_ACP, 0, rootPath.c_str(), rootPath.size(), NULL, 0);
     TCHAR* buffer = new TCHAR[len + 1];
     MultiByteToWideChar(CP_ACP, 0, rootPath.c_str(), rootPath.size(), buffer, len);
     buffer[len] = '\0';
     findPath.append(buffer);
+
+    // 遍历文件夹，找到第一个文件
     HANDLE findHandle = FindFirstFile(findPath.c_str(), &findedData);
+
     if (findHandle != INVALID_HANDLE_VALUE) {
         do 
         {
+            // wchar 2 string
             auto nameCharLen = WideCharToMultiByte(CP_OEMCP, 0, findedData.cFileName, wcslen(findedData.cFileName),
                                                    NULL, 0, NULL, NULL);
             char* itemFileName = new char[nameCharLen + 1];
             memset(itemFileName, '\0', nameCharLen + 1);
             WideCharToMultiByte(CP_OEMCP, 0, findedData.cFileName, wcslen(findedData.cFileName), itemFileName,
                                 nameCharLen, NULL, NULL);
+
             std::string fileNameStr{itemFileName};
             std::string itemFilePath = rootPath + "\\" + fileNameStr;
             if (findedData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {//文件夹
@@ -272,7 +278,7 @@ void AVCombination::getFolderVedioOrAudioFilePathList(std::string rootPath, std:
 
         } while ( FindNextFile(findHandle, &findedData) );
     }
-#elif __unix__ || __linux__ 
+#elif __unix__ || __linux__ // linux unix 下的操作
 	DIR* pDir;
 	struct dirent* ptr;
 	if (!(pDir = opendir(rootPath.c_str()))) {
