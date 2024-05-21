@@ -1,4 +1,18 @@
 #include "AVCombination.h"
+#include <algorithm>
+#include <stdio.h>
+#include <fstream>
+#include <iostream>
+#if _HAS_CXX17
+#include <filesystem>
+
+#elif _WIN64 || _WIN32  
+#include <windows.h>
+#elif __unix__ || __linux__ 
+#include <direct.h>
+#include <sys/types.h>
+#include <dirent.h>
+#endif
 
 #pragma region public method
 AVCombination::AVCombination() {
@@ -13,6 +27,34 @@ AVCombination::~AVCombination() {
     av_free(pVideoOutFrame);
     sws_freeContext(pVideoSwsCtx);
     avcodec_free_context(&pOutEnecodecCtx);
+}
+std::string AVCombination::getSuffixName(std::string fullName)
+{
+    int index = fullName.rfind(".");
+    if (index == std::string::npos) {
+        return "";
+    }
+    
+    return fullName.substr(fullName.length() - index, fullName.length());
+}
+bool AVCombination::isAudioFileName(std::string fileName)
+{
+	auto suffix = getSuffixName(fileName);
+	if (suffix.empty()) {
+		return false;
+	}
+	std::transform(suffix.begin(), suffix.end(), suffix.begin(), std::tolower);
+	return suffix == "mp3";
+}
+bool AVCombination::isVideoFileName(std::string fileName)
+{
+	auto suffix = getSuffixName(fileName);
+	if (suffix.empty()) {
+		return false;
+	}
+	std::transform(suffix.begin(), suffix.end(), suffix.begin(), std::tolower);
+    return suffix == "mp4" || suffix == "avi" || suffix == "mov" || suffix == "mpg" || suffix == "mpeg"
+           || suffix == "rm" || suffix == "rmvb" || suffix == "wmv" || suffix == "asf" || suffix == "dat";
 }
 bool AVCombination::mergeVedio(std::string filePath1, std::string filePath2) {
 
@@ -174,6 +216,82 @@ void AVCombination::decodeVideo(std::string filePath) {
     avcodec_free_context(&pDecodeCtx);
      av_packet_free(&pPacket);
      av_free(pFrame);
+}
+
+
+void AVCombination::getFolderVedioOrAudioFilePathList(std::string rootPath, std::vector<std::string>& out_resultList, bool isAudio)
+{
+    if (rootPath.empty()) {
+        return;
+    }
+#if _HAS_CXX17
+	for (auto it = std::filesystem::directory_iterator(rootPath); it != std::filesystem::directory_iterator(); it++) {
+        auto iterPath = it->path();
+        auto itemFileName = iterPath.filename();
+        if (it->is_directory()) {
+            getFolderVedioOrAudioFilePathList(rootPath+"\\"+ itemFileName, out_resultList, isAudio)
+        }
+        else {
+            auto suffixName = iterPath.extension();
+            suffixName = std::tolower(suffixName);
+            if ((isAudio && isAudioFileName(itemFileName)) || (!isAudio && isVideoFileName(itemFileName))) {
+                out_resultList.push_back(rootPath + "\\" + itemFileName);
+            }
+        }        
+	}
+
+#elif _WIN64 || _WIN32  
+    WIN32_FIND_DATA findedData;
+    std::wstring findPath;
+    int len = MultiByteToWideChar(CP_ACP, 0, rootPath.c_str(), rootPath.size(), NULL, 0);
+    TCHAR* buffer = new TCHAR[len + 1];
+    MultiByteToWideChar(CP_ACP, 0, rootPath.c_str(), rootPath.size(), buffer, len);
+    buffer[len] = '\0';
+    findPath.append(buffer);
+    HANDLE findHandle = FindFirstFile(findPath.c_str(), &findedData);
+    if (findHandle != INVALID_HANDLE_VALUE) {
+        do 
+        {
+            auto nameCharLen = WideCharToMultiByte(CP_OEMCP, 0, findedData.cFileName, wcslen(findedData.cFileName),
+                                                   NULL, 0, NULL, NULL);
+            char* itemFileName = new char[nameCharLen + 1];
+            memset(itemFileName, '\0', nameCharLen + 1);
+            WideCharToMultiByte(CP_OEMCP, 0, findedData.cFileName, wcslen(findedData.cFileName), itemFileName,
+                                nameCharLen, NULL, NULL);
+            std::string fileNameStr{itemFileName};
+            std::string itemFilePath = rootPath + "\\" + fileNameStr;
+            if (findedData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {//文件夹
+                
+                getFolderVedioOrAudioFilePathList(itemFilePath, out_resultList, isAudio);
+                
+            } else {
+                if ((isAudio && isAudioFileName(itemFileName)) || (!isAudio && isVideoFileName(itemFileName))) {
+                    out_resultList.push_back(itemFilePath);
+                }
+            }
+
+        } while ( FindNextFile(findHandle, &findedData) );
+    }
+#elif __unix__ || __linux__ 
+	DIR* pDir;
+	struct dirent* ptr;
+	if (!(pDir = opendir(rootPath.c_str()))) {
+		return;
+	}
+	while ((ptr = readdir(pDir)) != 0) {
+		if (strcmp(ptr->d_name, ".") == 0 && strcmp(ptr->d_name, "..") == 0) {
+			continue;
+		}
+		std::string itemPath = rootPath + "\\" + ptr->d_name;
+		if (ptr->d_type == DT_DIR) {
+			getFolderVedioOrAudioFilePathList(itemPath, out_resultList, isAudio)
+		}
+        if ((isAudio && isAudioFileName(ptr->d_name)) || (!isAudio && isVideoFileName(ptr->d_name))) {
+            out_resultList.push_back(itemPath);
+        }
+	}
+	closedir(pDir);
+#endif
 }
 #pragma endregion
 

@@ -36,9 +36,23 @@ public:
 #pragma region public method
 public:
     AVCombination();
-    ~AVCombination();
+	~AVCombination();
+	std::string getSuffixName(std::string fullName);
+    bool isAudioFileName(std::string fileName); 
+    bool isVideoFileName(std::string fileName);
+
     bool mergeVedio(std::string filePath1, std::string filePath2);
-    void decodeVideo(std::string filePath);
+	void decodeVideo(std::string filePath);
+
+    /**
+     * @brief : getFolderVedioOrAudioFilePathList
+	 * @param : rootPath 根目录
+	 * @param : out_resultList 输出参数结果目录
+	 * @param : isAudio 是否是查找音频
+     * @return:
+     * @author: TsunamiLee
+    **/
+	void getFolderVedioOrAudioFilePathList(std::string rootPath, std::vector<std::string>& out_resultList, bool isAudio=false);
 #pragma endregion
 
 #pragma region private method
