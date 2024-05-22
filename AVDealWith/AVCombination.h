@@ -43,7 +43,7 @@ public:
 
     bool mergeVedio(std::string filePath1, std::string filePath2);
 	void decodeVideo(std::string filePath);
-
+    void encodeVideo2JPG(std::string filePath);
     /**
      * @brief : getFolderVedioOrAudioFilePathList 获取路径下所有音频/视频文件
      * @param : rootPath, 路径

@@ -14,6 +14,9 @@
 #include <dirent.h>
 #endif
 
+
+#define DefFixFmt AV_PIX_FMT_YUV420P
+
 #pragma region public method
 AVCombination::AVCombination() {
     // 对设备进行注册
@@ -87,7 +90,7 @@ void AVCombination::decodeVideo(std::string filePath) {
     videoStreamIndex = dealwithResult;
     pDecodec = avcodec_find_decoder(pInputFormatCtx->streams[videoStreamIndex]->codecpar->codec_id);
     pDecodeCtx = avcodec_alloc_context3(pDecodec);
-    pDecodeCtx->pix_fmt = AV_PIX_FMT_YUVJ420P;
+    pDecodeCtx->pix_fmt = DefFixFmt;
     dealwithResult = avcodec_parameters_to_context(pDecodeCtx, pInputFormatCtx->streams[videoStreamIndex]->codecpar);
     if (dealwithResult < 0) {
         //printErrorInfo("avcodec_parameters_to_context 出错", dealwithResult);
@@ -120,91 +123,38 @@ void AVCombination::decodeVideo(std::string filePath) {
         }
 
 #pragma region encode and write output new video
-        // 编码生成新的视频
-        if (pOutFormatCtx) {
-            AVPacket* pOutEncodePacket = av_packet_alloc();  // av_packet_clone(pPacket);
-            av_init_packet(pPacket);
-            while (true)
-            {
-                dealwithResult = avcodec_receive_frame(pDecodeCtx, pFrame);
-                if (dealwithResult == AVERROR(EAGAIN)) {
-                    break;
-                }else if (dealwithResult < 0) {
-                } else{
-                    // 开始编码视频
-                    dealwithResult = avcodec_send_frame(pOutEnecodecCtx, pFrame);
-                    if (dealwithResult < 0) {
-                        printErrorInfo("avcodec_send_frame Error", dealwithResult);
-                    }
-
-                    dealwithResult = avcodec_receive_packet(pOutEnecodecCtx, pOutEncodePacket);
-                    if (dealwithResult < 0) {
-                        if (dealwithResult == AVERROR(EAGAIN)) {
-                            printErrorInfo("avcodec_receive_packet failed, must await next frame error code is ", dealwithResult);
-                        } else {
-                            printErrorInfo("avcodec_receive_packet Error", dealwithResult);
-                        }
-                    } else {
-                        // 将输出pakcet写入context
-                        av_write_frame(pOutFormatCtx, pOutEncodePacket);
-                    }
-                }
-            }
-        }
+         // 编码生成新的视频
+         if (pOutFormatCtx) {
+             AVPacket* pOutEncodePacket = av_packet_alloc();  // av_packet_clone(pPacket);
+             av_init_packet(pOutEncodePacket);
+             while (true)
+             {
+                 dealwithResult = avcodec_receive_frame(pDecodeCtx, pFrame);
+                 if (dealwithResult == AVERROR(EAGAIN)) {
+                     break;
+                 }else if (dealwithResult < 0) {
+                 } else{
+                     // 开始编码视频
+                     dealwithResult = avcodec_send_frame(pOutEnecodecCtx, pFrame);
+                     if (dealwithResult < 0) {
+                         printErrorInfo("avcodec_send_frame Error", dealwithResult);
+                     }
+ 
+                     dealwithResult = avcodec_receive_packet(pOutEnecodecCtx, pOutEncodePacket);
+                     if (dealwithResult < 0) {
+                         if (dealwithResult == AVERROR(EAGAIN)) {
+                             printErrorInfo("avcodec_receive_packet failed, must await next frame error code is ", dealwithResult);
+                         } else {
+                             printErrorInfo("avcodec_receive_packet Error", dealwithResult);
+                         }
+                     } else {
+                         // 将输出pakcet写入context
+                         av_write_frame(pOutFormatCtx, pOutEncodePacket);
+                     }
+                 }
+             }
+         }
 #pragma endregion
-//         while (true) {// 循环读取frame
-//             
-//             dealwithResult = avcodec_receive_frame(pDecodeCtx, pFrame);
-//             if (dealwithResult == AVERROR(EAGAIN)) {
-//                 break;
-//             } else if (dealwithResult < 0) {
-//             } else {
-//                 packetList.clear();
-//                 AVRational rational{1, AV_TIME_BASE};
-// 
-//                 // 编码生成图片
-//                 #pragma region mark ecode and write jpg
-// //                 {
-// //                     const AVCodec* pEncodec = avcodec_find_encoder(AV_CODEC_ID_MJPEG);
-// //                     AVCodecContext* pEncodecCtx = avcodec_alloc_context3(pEncodec);
-// //                     pEncodecCtx->width = pCodeCtx->width;
-// //                     pEncodecCtx->height = pCodeCtx->height;
-// //                     pEncodecCtx->pix_fmt = AV_PIX_FMT_YUVJ420P;
-// //                     pEncodecCtx->time_base = {1, 30};
-// //                     pCodeCtx->framerate;
-// //                     int encodeRet = avcodec_open2(pEncodecCtx, pEncodec, nullptr);
-// //                     if (encodeRet < 0) {
-// //                         printErrorInfo("", encodeRet);
-// //                         avcodec_close(pEncodecCtx);
-// //                         avcodec_free_context(&pEncodecCtx);
-// //                         continue;
-// //                     }
-// //                     encodeRet = avcodec_send_frame(pEncodecCtx, pFrame);
-// //                     if (encodeRet < 0) {
-// //                         avcodec_close(pEncodecCtx);
-// //                         avcodec_free_context(&pEncodecCtx);
-// //                         continue;
-// //                     }
-// //                     
-// //                     encodeRet = avcodec_receive_packet(pEncodecCtx, pEncodePacket);
-// //                     if (encodeRet >= 0) {//成功
-// //                         outPutFileName = "newVideo.jpg";
-// //                         FILE* tempFile = fopen(outPutFileName.c_str(), "wb");
-// //                         if (tempFile) {
-// //                             fwrite(pEncodePacket->data, 1, pEncodePacket->size, tempFile);
-// //                             fclose(tempFile);
-// //                             avcodec_close(pEncodecCtx);
-// //                             avcodec_free_context(&pEncodecCtx);
-// //                             break;
-// //                         }
-// //                     }
-// //                     avcodec_close(pEncodecCtx);
-// //                     avcodec_free_context(&pEncodecCtx);
-// //                 }
-//                 #pragma endregion
-// 
-//             }
-//         }
     }
 
     dealwithResult = av_write_trailer(pOutFormatCtx);
@@ -212,15 +162,127 @@ void AVCombination::decodeVideo(std::string filePath) {
         printErrorInfo("avcodec_receive_packet Error", dealwithResult);
     } else {
     }
-
-     //av_write_trailer(pOutFormatCtx);
-// 
-//     avformat_close_input(&pFormatCtx);
-//     avformat_free_context(pFormatCtx);
     avcodec_close(pDecodeCtx);
     avcodec_free_context(&pDecodeCtx);
-     av_packet_free(&pPacket);
-     av_free(pFrame);
+    av_packet_free(&pPacket);
+    av_free(pFrame);
+}
+
+void AVCombination::encodeVideo2JPG(std::string filePath) {
+    AVPacket* pPacket = av_packet_alloc();
+    av_init_packet(pPacket);
+    AVFrame* pFrame = av_frame_alloc();
+
+    std::vector<AVPacket*> packetList;
+    // 前面视频的pts累计
+    int64_t previous_pts = 0;
+    // 当前视频的最后pts
+    int64_t last_pts = 0;
+    int videoStreamIndex = -1;
+    int dealwithResult = -1;
+    avcodec_free_context(&pDecodeCtx);
+    dealwithResult = avformat_open_input(&pInputFormatCtx, filePath.c_str(), NULL, NULL);
+    if (dealwithResult < 0) {
+        printErrorInfo("avformat_open_input", dealwithResult);
+        return;
+    }
+    av_dump_format(pInputFormatCtx, 0, nullptr, 0);
+    dealwithResult = findStreamIndex(pInputFormatCtx, AVMEDIA_TYPE_VIDEO);
+    if (dealwithResult < 0) {
+        // printErrorInfo("av_find_best_stream error", 0);
+        return;
+    }
+    videoStreamIndex = dealwithResult;
+    pDecodec = avcodec_find_decoder(pInputFormatCtx->streams[videoStreamIndex]->codecpar->codec_id);
+    pDecodeCtx = avcodec_alloc_context3(pDecodec);
+    pDecodeCtx->pix_fmt = DefFixFmt;
+    dealwithResult = avcodec_parameters_to_context(pDecodeCtx, pInputFormatCtx->streams[videoStreamIndex]->codecpar);
+    if (dealwithResult < 0) {
+        // printErrorInfo("avcodec_parameters_to_context 出错", dealwithResult);
+        return;
+    }
+    dealwithResult = avcodec_open2(pDecodeCtx, pDecodec, NULL);
+    if (dealwithResult < 0) {
+        // printErrorInfo("avcodec_open2 failed", dealwithResult);
+        return;
+    }
+
+    while (true) {  // 循环读取packet
+        dealwithResult = av_read_frame(pInputFormatCtx, pPacket);
+        if (dealwithResult < 0) {  // 结束
+            // printErrorInfo("av_read_frame failed", 0);
+            break;
+        }
+        if (pPacket->stream_index != videoStreamIndex) {
+            continue;
+        }
+        dealwithResult = avcodec_send_packet(pDecodeCtx, pPacket);
+        if (dealwithResult < 0) {
+            // printErrorInfo("avcodec_send_packet failed", dealwithResult);
+            break;
+        }
+
+
+// 编码生成图片
+#pragma region mark ecode and write jpg
+        bool isBuildedJPG = false;
+        while (true) {  // 循环读取frame
+
+            dealwithResult = avcodec_receive_frame(pDecodeCtx, pFrame);
+            if (dealwithResult == AVERROR(EAGAIN)) {
+                break;
+            } else if (dealwithResult < 0) {
+            } else {
+                packetList.clear();
+                AVRational rational{1, AV_TIME_BASE};
+                {
+                    const AVCodec* pEncodec = avcodec_find_encoder(AV_CODEC_ID_MJPEG);
+                    AVCodecContext* pEncodecCtx = avcodec_alloc_context3(pEncodec);
+                    pEncodecCtx->width = 720;
+                    pEncodecCtx->height = 1080;
+                    pEncodecCtx->pix_fmt = AV_PIX_FMT_YUVJ420P;
+                    pEncodecCtx->time_base = {1, 30};
+                    int encodeRet = avcodec_open2(pEncodecCtx, pEncodec, nullptr);
+                    if (encodeRet < 0) {
+                        printErrorInfo("avcodec_open2 ", encodeRet);
+                        avcodec_close(pEncodecCtx);
+                        avcodec_free_context(&pEncodecCtx);
+                        continue;
+                    }
+                    encodeRet = avcodec_send_frame(pEncodecCtx, pFrame);
+                    if (encodeRet < 0) {
+                        avcodec_close(pEncodecCtx);
+                        avcodec_free_context(&pEncodecCtx);
+                        continue;
+                    }
+
+                    encodeRet = avcodec_receive_packet(pEncodecCtx, pPacket);
+                    if (encodeRet >= 0) {  // 成功
+                        outPutFileName = "newVideo.jpg";
+                        FILE* tempFile = fopen(outPutFileName.c_str(), "wb");
+                        if (tempFile) {
+                            fwrite(pPacket->data, 1, pPacket->size, tempFile);
+                            fclose(tempFile);
+                            avcodec_close(pEncodecCtx);
+                            avcodec_free_context(&pEncodecCtx);
+                            isBuildedJPG = true;
+                            break;
+                        }
+                    }
+                    avcodec_close(pEncodecCtx);
+                    avcodec_free_context(&pEncodecCtx);
+                }
+            }
+        }
+        if (isBuildedJPG) {
+            break;
+        }
+#pragma endregion
+    }
+    avcodec_close(pDecodeCtx);
+    avcodec_free_context(&pDecodeCtx);
+    av_packet_free(&pPacket);
+    av_free(pFrame);
 }
 
 
@@ -393,7 +455,7 @@ int AVCombination::fillVideoEncodecContainer(AVCodecID codeId) {
     // 编码类型
     pOutEnecodecCtx->codec_type = AVMEDIA_TYPE_VIDEO;
     // 注意：这个类型是根据你解码的时候指定的解码的视频像素数据格式类型
-    pOutEnecodecCtx->pix_fmt = AV_PIX_FMT_YUV420P;
+    pOutEnecodecCtx->pix_fmt = DefFixFmt;
     // 视频宽高
     pOutEnecodecCtx->width = pDecodeCtx->width;
     pOutEnecodecCtx->height = pDecodeCtx->height;

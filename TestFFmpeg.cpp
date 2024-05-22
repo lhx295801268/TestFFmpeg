@@ -10,7 +10,8 @@ int main() {
     avObj.getFolderVedioOrAudioFilePathList("H:\\workspace\\TestFFmpeg\\resource", vedioPathList, false);
     if (vedioPathList.size() > 0) {
         
-        avObj.outPutFileName = ".\\desResource\\NOR_0000000_000000_20240520_183826_0054.mp4";
+        avObj.outPutFileName = ".\\desResource\\New_1.mp4";
+        // avObj.encodeVideo2JPG(*vedioPathList.begin());
         avObj.decodeVideo(*vedioPathList.begin());
     }
     system("pause");
