@@ -387,7 +387,7 @@ int AVCombination::fillVideoEncodecContainer(AVCodecID codeId) {
     if (!pEncodeStream) {
         return -1;
     }
-    pEncodeStream->time_base = {0, 1};
+    pEncodeStream->time_base = {0, 30};
 
     pOutEnecodecCtx->codec = pOutCodec;
     // 编码类型
