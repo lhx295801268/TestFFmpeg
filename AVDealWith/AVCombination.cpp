@@ -31,11 +31,11 @@ AVCombination::~AVCombination() {
 std::string AVCombination::getSuffixName(std::string fullName)
 {
     int index = fullName.rfind(".");
-    if (index == std::string::npos) {
+    if (index == std::string::npos || index >= (fullName.length() - 1)) {
         return "";
     }
     
-    return fullName.substr(fullName.length() - index, fullName.length());
+    return fullName.substr(index+1, fullName.length());
 }
 bool AVCombination::isAudioFileName(std::string fileName)
 {
@@ -122,6 +122,8 @@ void AVCombination::decodeVideo(std::string filePath) {
 #pragma region encode and write output new video
         // 编码生成新的视频
         if (pOutFormatCtx) {
+            AVPacket* pOutEncodePacket = av_packet_alloc();  // av_packet_clone(pPacket);
+            av_init_packet(pPacket);
             while (true)
             {
                 dealwithResult = avcodec_receive_frame(pDecodeCtx, pFrame);
@@ -129,18 +131,21 @@ void AVCombination::decodeVideo(std::string filePath) {
                     break;
                 }else if (dealwithResult < 0) {
                 } else{
-                    // av_write_frame(pOutFormatCtx, pPacket);
+                    // 开始编码视频
                     dealwithResult = avcodec_send_frame(pOutEnecodecCtx, pFrame);
                     if (dealwithResult < 0) {
                         printErrorInfo("avcodec_send_frame Error", dealwithResult);
                     }
 
-                    AVPacket* pOutEncodePacket = av_packet_alloc();  // av_packet_clone(pPacket);
-                    av_init_packet(pPacket);
                     dealwithResult = avcodec_receive_packet(pOutEnecodecCtx, pOutEncodePacket);
                     if (dealwithResult < 0) {
-                        printErrorInfo("avcodec_receive_packet Error", dealwithResult);
+                        if (dealwithResult == AVERROR(EAGAIN)) {
+                            printErrorInfo("avcodec_receive_packet failed, must await next frame error code is ", dealwithResult);
+                        } else {
+                            printErrorInfo("avcodec_receive_packet Error", dealwithResult);
+                        }
                     } else {
+                        // 将输出pakcet写入context
                         av_write_frame(pOutFormatCtx, pOutEncodePacket);
                     }
                 }
@@ -242,16 +247,18 @@ void AVCombination::getFolderVedioOrAudioFilePathList(std::string rootPath, std:
 
 #elif _WIN64 || _WIN32  
     WIN32_FIND_DATA findedData;
-    std::wstring findPath;
+    std::wstring findFolderPath;
     // string 2 wstring
-    int len = MultiByteToWideChar(CP_ACP, 0, rootPath.c_str(), rootPath.size(), NULL, 0);
+    std::string folderPath = rootPath;
+    folderPath += "\\*";
+    int len = MultiByteToWideChar(CP_ACP, 0, folderPath.c_str(), folderPath.size(), NULL, 0);
     TCHAR* buffer = new TCHAR[len + 1];
-    MultiByteToWideChar(CP_ACP, 0, rootPath.c_str(), rootPath.size(), buffer, len);
+    MultiByteToWideChar(CP_ACP, 0, folderPath.c_str(), folderPath.size(), buffer, len);
     buffer[len] = '\0';
-    findPath.append(buffer);
+    findFolderPath.append(buffer);
 
     // 遍历文件夹，找到第一个文件
-    HANDLE findHandle = FindFirstFile(findPath.c_str(), &findedData);
+    HANDLE findHandle = FindFirstFile(findFolderPath.c_str(), &findedData);
 
     if (findHandle != INVALID_HANDLE_VALUE) {
         do 
@@ -265,14 +272,16 @@ void AVCombination::getFolderVedioOrAudioFilePathList(std::string rootPath, std:
                                 nameCharLen, NULL, NULL);
 
             std::string fileNameStr{itemFileName};
-            std::string itemFilePath = rootPath + "\\" + fileNameStr;
-            if (findedData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {//文件夹
-                
-                getFolderVedioOrAudioFilePathList(itemFilePath, out_resultList, isAudio);
-                
-            } else {
-                if ((isAudio && isAudioFileName(itemFileName)) || (!isAudio && isVideoFileName(itemFileName))) {
-                    out_resultList.push_back(itemFilePath);
+            if (fileNameStr != "." && fileNameStr != "..") {
+                std::string itemFilePath = rootPath + "\\" + fileNameStr;
+                if (findedData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {  // 文件夹
+
+                    getFolderVedioOrAudioFilePathList(itemFilePath, out_resultList, isAudio);
+
+                } else {
+                    if ((isAudio && isAudioFileName(itemFileName)) || (!isAudio && isVideoFileName(itemFileName))) {
+                        out_resultList.push_back(itemFilePath);
+                    }
                 }
             }
 
@@ -323,31 +332,6 @@ void AVCombination::scaleWHFrame(AVFrame* pDesFrame) {
     }
 }
 
-void AVCombination::reEncodecVideo(std::vector<AVPacket*>& packetList, AVFrame* pDesFrame, AVCodecContext* pOutCodecCtx) {
-    if (!pDesFrame || !pOutCodecCtx) {
-        return;
-    }
-    
-    int ret = avcodec_send_frame(pOutCodecCtx, pDesFrame);
-    if (ret < 0) {
-        printErrorInfo("reEncodecVideo avcodec_send_frame error", ret);
-        return;
-    }
-    while (true)
-    {
-        AVPacket* pItemPacket=av_packet_alloc();
-        ret = avcodec_receive_packet(pOutCodecCtx, pItemPacket);
-        if (ret == AVERROR(EAGAIN)) {
-            //printErrorInfo("video encode error EAGAIN", ret);
-            break;
-        }else if (ret < 0) {
-            //printErrorInfo("video encode failed", ret);
-        } else {
-            packetList.push_back(pItemPacket);
-        }
-    }
-}
-
 int AVCombination::findStreamIndex(AVFormatContext* pSrcCtx, AVMediaType desType) {
     if (!pSrcCtx) {
         printErrorInfo("findDesCodecIndex error src format context is null", 0);
@@ -389,7 +373,7 @@ int AVCombination::fillVideoEncodecContainer(AVCodecID codeId) {
     avformat_free_context(pOutFormatCtx);
     pOutFormatCtx = avformat_alloc_context();
 
-    pOutputFormat = av_guess_format(nullptr, "newOutVideo4Video.mp4", nullptr);
+    pOutputFormat = av_guess_format(nullptr, outPutFileName.c_str(), nullptr);
     pOutFormatCtx->oformat = pOutputFormat;
     avformat_alloc_output_context2(&pOutFormatCtx, pOutputFormat, nullptr, outPutFileName.c_str());  // 视频流操作
 
@@ -403,8 +387,7 @@ int AVCombination::fillVideoEncodecContainer(AVCodecID codeId) {
     if (!pEncodeStream) {
         return -1;
     }
-    pEncodeStream->time_base.num = pOutEnecodecCtx->time_base.num;
-    pEncodeStream->time_base.den = pOutEnecodecCtx->time_base.den;
+    pEncodeStream->time_base = {0, 1};
 
     pOutEnecodecCtx->codec = pOutCodec;
     // 编码类型
@@ -419,14 +402,13 @@ int AVCombination::fillVideoEncodecContainer(AVCodecID codeId) {
     // gop画面帧大小 gopsize数量之后插入一个I帧（关键帧）越少视频就越小但过分少会导致编码失败
     pOutEnecodecCtx->gop_size = pDecodeCtx->gop_size;
     // 设置帧率 这里是每秒30帧，帧数越大越流畅
-    pOutEnecodecCtx->time_base.num = 1;
-    pOutEnecodecCtx->time_base.den = 30;
+    pOutEnecodecCtx->time_base = {1, 30};
     pOutEnecodecCtx->framerate = {0, 1};
     // 设置量化参数
     pOutEnecodecCtx->qmin = pDecodeCtx->qmin;
     pOutEnecodecCtx->qmax = pDecodeCtx->qmax;
     // 设置B帧最大值 前后预测帧
-    pOutEnecodecCtx->max_b_frames = 3;  // pDecodeCtx->max_b_frames;
+    pOutEnecodecCtx->max_b_frames = pDecodeCtx->max_b_frames;
     ret = avcodec_parameters_from_context(pEncodeStream->codecpar, pOutEnecodecCtx);
 
     // 若是H264编码器，要设置一些参数
@@ -457,11 +439,14 @@ int AVCombination::fillVideoEncodecContainer(AVCodecID codeId) {
     }
     return 0;
 }
+
 void AVCombination::outputFile(AVPacket* pDesPacket) {
 
 }
+
 void AVCombination::dealloc() {
 }
+
 void AVCombination::printErrorInfo(std::string prefixStr, int errorCode) {
     char error[1024];
     if (errorCode != 0) {

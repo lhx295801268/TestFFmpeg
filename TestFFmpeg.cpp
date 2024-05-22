@@ -6,8 +6,13 @@
 
 int main() {
     AVCombination avObj;
-    // avObj.mergeVedio("E:\\cache\\Timeline1.mov", "E:\\cache\\RPReplay_Final1695610957.mp4");
-    avObj.decodeVideo("E:\\cache\\Timeline1.mov");
+    std::vector<std::string> vedioPathList;
+    avObj.getFolderVedioOrAudioFilePathList("H:\\workspace\\TestFFmpeg\\resource", vedioPathList, false);
+    if (vedioPathList.size() > 0) {
+        
+        avObj.outPutFileName = ".\\NOR_0000000_000000_20240520_183826_0054.mp4";
+        avObj.decodeVideo(*vedioPathList.begin());
+    }
     system("pause");
     return 0;
 }

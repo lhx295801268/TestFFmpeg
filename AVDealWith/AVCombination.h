@@ -45,13 +45,13 @@ public:
 	void decodeVideo(std::string filePath);
 
     /**
-     * @brief : getFolderVedioOrAudioFilePathList
-	 * @param : rootPath 根目录
-	 * @param : out_resultList 输出参数结果目录
-	 * @param : isAudio 是否是查找音频
+     * @brief : getFolderVedioOrAudioFilePathList 获取路径下所有音频/视频文件
+     * @param : rootPath, 路径
+     * @param : out_resultList, 输出参数文件路径
+     * @param : isAudio 是否查找音频 false 查找视频 true 查找音频
      * @return:
      * @author: TsunamiLee
-    **/
+     **/
 	void getFolderVedioOrAudioFilePathList(std::string rootPath, std::vector<std::string>& out_resultList, bool isAudio=false);
 #pragma endregion
 
@@ -64,14 +64,6 @@ private:
      * @author: TsunamiLee
      **/
     void scaleWHFrame(AVFrame* pDesFrame);
-
-    /**
-     * @brief : reEncodecVideo 重新编码函数
-     * @param : packetList, pDesFrame
-     * @return:
-     * @author: TsunamiLee
-     **/
-    void reEncodecVideo(std::vector<AVPacket*>& packetList, AVFrame* pDesFrame, AVCodecContext* pOutCodecCtx);
 
     /**
      * @brief : findDesCodecIndex 在上下文中找到对应媒体类型的流索引
