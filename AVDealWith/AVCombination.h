@@ -57,13 +57,6 @@ public:
 
 #pragma region private method
 private:
-    /**
-     * @brief : scaleWHFrame 尺寸转换
-     * @param : pDesFrame
-     * @return:
-     * @author: TsunamiLee
-     **/
-    void scaleWHFrame(AVFrame* pDesFrame);
 
     /**
      * @brief : findDesCodecIndex 在上下文中找到对应媒体类型的流索引
@@ -104,11 +97,11 @@ private:
     const AVOutputFormat* pOutputFormat = nullptr;
 
     AVFormatContext* pOutFormatCtx = nullptr;
-    AVBSFContext* pBSFCtx = nullptr;
     const AVCodec* pOutCodec = nullptr;
     AVCodecContext* pOutEnecodecCtx = nullptr;
-    SwsContext* pVideoSwsCtx = nullptr;
     AVFrame* pVideoOutFrame = nullptr;
     FILE* pOutVideoFile = nullptr;
+
+    int inputVideoStreamIndex = -1;
 #pragma endregion
 };

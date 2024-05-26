@@ -14,7 +14,6 @@ int main() {
         // avObj.encodeVideo2JPG(*vedioPathList.begin());
         avObj.decodeVideo(*vedioPathList.begin());
     }
-    system("pause");
     return 0;
 }
 

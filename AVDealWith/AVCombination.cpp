@@ -26,13 +26,9 @@ AVCombination::AVCombination() {
 }
 
 AVCombination::~AVCombination() {
-    avformat_network_deinit();
-    av_free(pVideoOutFrame);
-    sws_freeContext(pVideoSwsCtx);
-    avcodec_free_context(&pOutEnecodecCtx);
+    dealloc();
 }
-std::string AVCombination::getSuffixName(std::string fullName)
-{
+std::string AVCombination::getSuffixName(std::string fullName) {
     int index = fullName.rfind(".");
     if (index == std::string::npos || index >= (fullName.length() - 1)) {
         return "";
@@ -88,6 +84,7 @@ void AVCombination::decodeVideo(std::string filePath) {
         return;
     }
     videoStreamIndex = dealwithResult;
+    inputVideoStreamIndex = videoStreamIndex;
     pDecodec = avcodec_find_decoder(pInputFormatCtx->streams[videoStreamIndex]->codecpar->codec_id);
     pDecodeCtx = avcodec_alloc_context3(pDecodec);
     pDecodeCtx->pix_fmt = DefFixFmt;
@@ -127,6 +124,7 @@ void AVCombination::decodeVideo(std::string filePath) {
          if (pOutFormatCtx) {
              AVPacket* pOutEncodePacket = av_packet_alloc();  // av_packet_clone(pPacket);
              av_init_packet(pOutEncodePacket);
+             int frameIndex = 0;
              while (true)
              {
                  dealwithResult = avcodec_receive_frame(pDecodeCtx, pFrame);
@@ -152,6 +150,8 @@ void AVCombination::decodeVideo(std::string filePath) {
                          av_write_frame(pOutFormatCtx, pOutEncodePacket);
                      }
                  }
+
+                 frameIndex++;
              }
          }
 #pragma endregion
@@ -373,26 +373,6 @@ void AVCombination::getFolderVedioOrAudioFilePathList(std::string rootPath, std:
 #pragma endregion
 
 #pragma region private method
-void AVCombination::scaleWHFrame(AVFrame* pDesFrame) {
-    if (!pDesFrame) {
-        return;
-    }
-    pVideoSwsCtx = sws_getCachedContext(pVideoSwsCtx, pDesFrame->width, pDesFrame->height, AV_PIX_FMT_YUV420P,
-                                        targetVideoWidth, targetVideoHeight, AV_PIX_FMT_YUV420P, SWS_BILINEAR, nullptr, nullptr, nullptr);
-    if (!pVideoOutFrame) {
-        pVideoOutFrame = av_frame_alloc();
-        pVideoOutFrame->format = AV_PIX_FMT_YUV420P;
-        pVideoOutFrame->width = targetVideoWidth;
-        pVideoOutFrame->height = targetVideoHeight;
-        av_frame_get_buffer(pVideoOutFrame, 0);
-    }
-    int ret = sws_scale(pVideoSwsCtx, pDesFrame->data, pDesFrame->linesize, 0, pDesFrame->height, pVideoOutFrame->data,
-                        pVideoOutFrame->linesize);
-    pVideoOutFrame->pts = pDesFrame->pkt_dts;
-    if (ret<0) {
-        printErrorInfo("sws_scale video error", ret);
-    }
-}
 
 int AVCombination::findStreamIndex(AVFormatContext* pSrcCtx, AVMediaType desType) {
     if (!pSrcCtx) {
@@ -449,7 +429,20 @@ int AVCombination::fillVideoEncodecContainer(AVCodecID codeId) {
     if (!pEncodeStream) {
         return -1;
     }
-    pEncodeStream->time_base = {0, 30};
+    pEncodeStream->time_base = {30, 3};
+    pEncodeStream->r_frame_rate = {30, 1};
+    pEncodeStream->avg_frame_rate = {30, 1};
+    pEncodeStream->sample_aspect_ratio = {0, 1};
+//     if (inputVideoStreamIndex >= 0) {
+         auto pTempStream = pInputFormatCtx->streams[inputVideoStreamIndex];
+//         pEncodeStream->time_base = pTempStream->time_base;
+//         pEncodeStream->r_frame_rate = pTempStream->r_frame_rate;
+//         pEncodeStream->avg_frame_rate = pTempStream->avg_frame_rate;
+//         pEncodeStream->sample_aspect_ratio = pTempStream->sample_aspect_ratio;
+//         pEncodeStream->attached_pic = pTempStream->attached_pic;
+//         pEncodeStream->codecpar = pTempStream->codecpar;
+         pEncodeStream->duration = pTempStream->duration;
+//     }
 
     pOutEnecodecCtx->codec = pOutCodec;
     // 编码类型
@@ -464,13 +457,16 @@ int AVCombination::fillVideoEncodecContainer(AVCodecID codeId) {
     // gop画面帧大小 gopsize数量之后插入一个I帧（关键帧）越少视频就越小但过分少会导致编码失败
     pOutEnecodecCtx->gop_size = pDecodeCtx->gop_size;
     // 设置帧率 这里是每秒30帧，帧数越大越流畅
-    pOutEnecodecCtx->time_base = {1, 30};
-    pOutEnecodecCtx->framerate = {0, 1};
+    pOutEnecodecCtx->time_base = {30, 3};
+    pOutEnecodecCtx->framerate = {30, 1};
+    
     // 设置量化参数
     pOutEnecodecCtx->qmin = pDecodeCtx->qmin;
     pOutEnecodecCtx->qmax = pDecodeCtx->qmax;
     // 设置B帧最大值 前后预测帧
     pOutEnecodecCtx->max_b_frames = pDecodeCtx->max_b_frames;
+//     ret = avcodec_parameters_to_context(pOutEnecodecCtx, pInputFormatCtx->streams[inputVideoStreamIndex]->codecpar);
+//     pOutEnecodecCtx->pix_fmt = DefFixFmt;
     ret = avcodec_parameters_from_context(pEncodeStream->codecpar, pOutEnecodecCtx);
 
     // 若是H264编码器，要设置一些参数
@@ -490,7 +486,12 @@ int AVCombination::fillVideoEncodecContainer(AVCodecID codeId) {
         pOutEnecodecCtx = nullptr;
         return ret;
     }
-    pOutFormatCtx->streams[0]->codecpar;
+    std::cout << "avformat_write_header before out format stream time base den is : " << pOutEnecodecCtx->time_base.den
+              << " num is : " << pOutEnecodecCtx->time_base.num
+              << std::endl;
+    std::cout << "avformat_write_header before out format stream time base den is : "
+              << pOutFormatCtx->streams[0]->time_base.den << " num is : " << pOutFormatCtx->streams[0]->time_base.num
+              << std::endl;
     ret = avformat_write_header(pOutFormatCtx, nullptr);
     if (ret < 0) {
         avcodec_close(pOutEnecodecCtx);
@@ -499,6 +500,9 @@ int AVCombination::fillVideoEncodecContainer(AVCodecID codeId) {
         printErrorInfo("avformat_write_header Error", ret);
         return ret;
     }
+    std::cout << "out format stream time base den is : " << pOutFormatCtx->streams[0]->time_base.den << " num is : "
+              << pOutFormatCtx->streams[0]->time_base.num
+              << std::endl;
     return 0;
 }
 
@@ -507,9 +511,47 @@ void AVCombination::outputFile(AVPacket* pDesPacket) {
 }
 
 void AVCombination::dealloc() {
+    avformat_network_deinit();
+
+    //     AVFormatContext* pInputFormatCtx = nullptr;
+    if (pInputFormatCtx != nullptr) {
+        avformat_close_input(&pInputFormatCtx);
+        avformat_free_context(pInputFormatCtx);
+    }
+    pInputFormatCtx = nullptr;
+
+    if (pDecodeCtx != nullptr) {
+        avcodec_close(pDecodeCtx);
+        avcodec_free_context(&pDecodeCtx);
+    }
+    pDecodeCtx = nullptr;
+
+//     if (pOutputFormat != nullptr) {
+//         pOutputFormat = nullptr;
+//     }
+// 
+//     if (pVideoOutFrame != nullptr) {
+//         av_frame_free(&pVideoOutFrame);
+//     }
+//     pVideoOutFrame = nullptr;
+// 
+//     if (pOutVideoFile != nullptr) {
+//         fclose(pOutVideoFile);
+//     }
+//     pOutVideoFile = nullptr;
+// 
+//     if (pOutEnecodecCtx != nullptr) {
+//         avcodec_close(pOutEnecodecCtx);
+//     }
+//     pOutEnecodecCtx = nullptr;
+// 
+//     if (pOutFormatCtx != nullptr) {
+//         avformat_close_input(&pOutFormatCtx);
+//     }
 }
 
 void AVCombination::printErrorInfo(std::string prefixStr, int errorCode) {
+    return;
     char error[1024];
     if (errorCode != 0) {
         av_strerror(errorCode, error, 1024);
